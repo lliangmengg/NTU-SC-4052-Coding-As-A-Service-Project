@@ -1,0 +1,4 @@
+/.env
+/.pytest_cache
+/QUEUE_VERIFICATION.md
+/requirements.txt

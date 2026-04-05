@@ -1,0 +1,54 @@
+{
+  "tasks": [
+    {
+      "task_id": "sum_list",
+      "problem_description": "Implement function `solution(nums)` that returns the sum of all integers in list nums. Return 0 for empty list.",
+      "entry_point": "solution",
+      "tests": [
+        "assert solution([1, 2, 3]) == 6",
+        "assert solution([]) == 0",
+        "assert solution([-1, 5, -4]) == 0"
+      ]
+    },
+    {
+      "task_id": "is_palindrome",
+      "problem_description": "Implement function `solution(s)` that returns True if string s is a palindrome and False otherwise. Treat case sensitively.",
+      "entry_point": "solution",
+      "tests": [
+        "assert solution('racecar') is True",
+        "assert solution('abba') is True",
+        "assert solution('abc') is False"
+      ]
+    },
+    {
+      "task_id": "fibonacci_n",
+      "problem_description": "Implement function `solution(n)` that returns the nth Fibonacci number where n >= 0 and F(0)=0, F(1)=1.",
+      "entry_point": "solution",
+      "tests": [
+        "assert solution(0) == 0",
+        "assert solution(1) == 1",
+        "assert solution(7) == 13"
+      ]
+    },
+    {
+      "task_id": "max_in_list",
+      "problem_description": "Implement function `solution(nums)` that returns the maximum integer in a non-empty list nums.",
+      "entry_point": "solution",
+      "tests": [
+        "assert solution([1, 5, 3]) == 5",
+        "assert solution([-3, -1, -2]) == -1",
+        "assert solution([42]) == 42"
+      ]
+    },
+    {
+      "task_id": "count_vowels",
+      "problem_description": "Implement function `solution(s)` that returns the number of lowercase vowels (a,e,i,o,u) in string s.",
+      "entry_point": "solution",
+      "tests": [
+        "assert solution('hello') == 2",
+        "assert solution('bcdfg') == 0",
+        "assert solution('aeiou') == 5"
+      ]
+    }
+  ]
+}

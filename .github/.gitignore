@@ -1,5 +1,0 @@
-celerybeat-schedule
-*.pid
-*.log
-.env
-__pycache__/

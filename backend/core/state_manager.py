@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Dict, Any, Optional
 
 import redis
@@ -45,6 +46,9 @@ def create_job(job_id: str):
             "current_step": "Initializing Agents",
             "code": "",
             "explanation": "",
+            "artifacts": "{}",
+            "current_attempt": "0",
+            "max_retries": "3",
         }
         pipe = _redis_client.pipeline()
         pipe.hset(_job_key(job_id), mapping=fields)
@@ -59,11 +63,23 @@ def create_job(job_id: str):
         "current_step": "Initializing Agents",
         "code": None,
         "explanation": None,
+        "artifacts": {},
+        "current_attempt": 0,
+        "max_retries": 3,
         "logs": [],
     }
 
 
-def update_job(job_id: str, status: str, step: str = None, code: str = None, explanation: str = None):
+def update_job(
+    job_id: str,
+    status: str,
+    step: str = None,
+    code: str = None,
+    explanation: str = None,
+    artifacts: Dict[str, Any] = None,
+    current_attempt: int = None,
+    max_retries: int = None,
+):
     if _try_redis_ping():
         if not _redis_client.exists(_job_key(job_id)):
             return
@@ -77,6 +93,18 @@ def update_job(job_id: str, status: str, step: str = None, code: str = None, exp
             updates["code"] = code
         if explanation is not None:
             updates["explanation"] = explanation
+        if current_attempt is not None:
+            updates["current_attempt"] = str(current_attempt)
+        if max_retries is not None:
+            updates["max_retries"] = str(max_retries)
+        if artifacts:
+            existing_raw = _redis_client.hget(_job_key(job_id), "artifacts") or "{}"
+            try:
+                merged_artifacts = json.loads(existing_raw)
+            except json.JSONDecodeError:
+                merged_artifacts = {}
+            merged_artifacts.update(artifacts)
+            updates["artifacts"] = json.dumps(merged_artifacts)
 
         pipe = _redis_client.pipeline()
         if updates:
@@ -95,6 +123,12 @@ def update_job(job_id: str, status: str, step: str = None, code: str = None, exp
             _jobs_fallback[job_id]["code"] = code
         if explanation is not None:
             _jobs_fallback[job_id]["explanation"] = explanation
+        if current_attempt is not None:
+            _jobs_fallback[job_id]["current_attempt"] = current_attempt
+        if max_retries is not None:
+            _jobs_fallback[job_id]["max_retries"] = max_retries
+        if artifacts:
+            _jobs_fallback[job_id].setdefault("artifacts", {}).update(artifacts)
 
 
 def append_log(job_id: str, log_line: str):
@@ -122,12 +156,20 @@ def get_job_status(job_id: str) -> Optional[Dict[str, Any]]:
 
         code = data.get("code", "")
         explanation = data.get("explanation", "")
+        artifacts_raw = data.get("artifacts", "{}")
+        try:
+            artifacts = json.loads(artifacts_raw)
+        except json.JSONDecodeError:
+            artifacts = {}
 
         return {
             "status": data.get("status", "PROCESSING"),
             "current_step": data.get("current_step", "Initializing Agents"),
             "code": code if code else None,
             "explanation": explanation if explanation else None,
+            "artifacts": artifacts,
+            "current_attempt": int(data.get("current_attempt", "0")),
+            "max_retries": int(data.get("max_retries", "3")),
             "logs": logs,
         }
 

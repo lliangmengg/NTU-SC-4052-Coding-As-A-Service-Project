@@ -7,7 +7,14 @@ from backend.engine.prompts import (
 )
 from backend.engine.pipeline_data import PipelineState, MAX_RETRIES
 from crewai import Crew, Task
-from backend.engine.utils import _log, _log_agent_exchange, _run_crew_with_timeout, _append_failure_history, _update_job
+from backend.engine.utils import (
+    _log,
+    _log_agent_exchange,
+    _run_crew_with_timeout,
+    _append_failure_history,
+    _update_job,
+    extract_structured_output,
+)
 from backend.engine.agents import developer_agent, qa_agent, reflection_agent, tutor_agent
 from backend.core.execution_sandbox import execute_tests_against_solution
 
@@ -39,7 +46,18 @@ def _run_agent_step(
     return _run_crew_with_timeout(job_id, attempt, stage_name, crew)
 
 def _fail_pipeline(state: PipelineState, reason: str) -> PipelineState:
-    _update_job(state.job_id, "FAILED", reason)
+    _update_job(
+        state.job_id,
+        "FAILED",
+        reason,
+        current_attempt=state.attempt,
+        max_retries=state.max_retries,
+        artifacts={
+            "system": {
+                "failure_reason": reason,
+            }
+        },
+    )
     _log(state.job_id, f"[FATAL] {reason}")
     state.step = "failed"
     return state
@@ -53,7 +71,15 @@ def _start_new_attempt(state: PipelineState) -> PipelineState:
     _update_job(
         state.job_id,
         "PROCESSING",
-        f"Attempt {state.attempt}: Developer generating code..."
+        f"Attempt {state.attempt}: Developer generating code...",
+        current_attempt=state.attempt,
+        max_retries=state.max_retries,
+        artifacts={
+            "planner": {
+                "attempt": state.attempt,
+                "summary": "Prepared prompt context and retry history for Developer.",
+            }
+        },
     )
     state.step = "developer"
     return state
@@ -87,7 +113,15 @@ def run_developer(state: PipelineState) -> PipelineState:
     _update_job(
         state.job_id,
         "PROCESSING",
-        f"Attempt {state.attempt}: Sanitizing developer output..."
+        f"Attempt {state.attempt}: Sanitizing developer output...",
+        current_attempt=state.attempt,
+        max_retries=state.max_retries,
+        artifacts={
+            "developer": {
+                "attempt": state.attempt,
+                "raw_output": state.developer_code_raw,
+            }
+        },
     )
     state.step = "sanitize_developer"
     return state
@@ -117,7 +151,15 @@ def run_qa(state: PipelineState) -> PipelineState:
     _update_job(
         state.job_id,
         "PROCESSING",
-        f"Attempt {state.attempt}: Sanitizing QA output..."
+        f"Attempt {state.attempt}: Sanitizing QA output...",
+        current_attempt=state.attempt,
+        max_retries=state.max_retries,
+        artifacts={
+            "qa": {
+                "attempt": state.attempt,
+                "raw_output": state.qa_tests_raw,
+            }
+        },
     )
     state.step = "sanitize_qa"
     return state
@@ -136,7 +178,20 @@ def run_sandbox(state: PipelineState) -> PipelineState:
     )
 
     if state.sandbox_result["success"]:
-        _update_job(state.job_id, "PROCESSING", "Success! Tutoring...")
+        _update_job(
+            state.job_id,
+            "PROCESSING",
+            "Success! Tutoring...",
+            current_attempt=state.attempt,
+            max_retries=state.max_retries,
+            artifacts={
+                "sandbox": {
+                    "attempt": state.attempt,
+                    "success": True,
+                    "result": state.sandbox_result,
+                }
+            },
+        )
         state.step = "tutor"
         return state
 
@@ -153,7 +208,16 @@ def run_sandbox(state: PipelineState) -> PipelineState:
     _update_job(
         state.job_id,
         "PROCESSING",
-        f"Attempt {state.attempt} failed. Reflecting..."
+        f"Attempt {state.attempt} failed. Reflecting...",
+        current_attempt=state.attempt,
+        max_retries=state.max_retries,
+        artifacts={
+            "sandbox": {
+                "attempt": state.attempt,
+                "success": False,
+                "result": state.sandbox_result,
+            }
+        },
     )
     state.step = "reflection"
     return state
@@ -190,7 +254,15 @@ def run_reflection(state: PipelineState) -> PipelineState:
     _update_job(
         state.job_id,
         "PROCESSING",
-        f"Attempt {state.attempt + 1}: Coding & Testing..."
+        f"Attempt {state.attempt + 1}: Coding & Testing...",
+        current_attempt=state.attempt,
+        max_retries=state.max_retries,
+        artifacts={
+            "reflection": {
+                "attempt": state.attempt,
+                "output": state.reflection_output,
+            }
+        },
     )
     state.step = "developer"
     state.attempt += 1
@@ -204,13 +276,18 @@ def run_tutor(state: PipelineState) -> PipelineState:
     )
 
     try:
-        state.explanation = _run_agent_step(
+        tutor_raw = _run_agent_step(
             state.job_id,
             state.attempt,
             "Tutor Agent",
             tutor_agent,
             prompt,
         )
+        extracted = extract_structured_output(tutor_raw, "EXPLANATION")
+        state.explanation = extracted["primary"].strip() if extracted["primary"].strip() else tutor_raw
+        state.tutor_summary = extracted["summary"]
+        if not extracted["used_structured"]:
+            _log(state.job_id, "[PARSE_FALLBACK] Tutor response missing [EXPLANATION]/[SUMMARY] tags.")
     except TimeoutError as exc:
         return _fail_pipeline(state, f"Attempt {state.attempt} failed: {str(exc)}")
 
@@ -228,6 +305,15 @@ def run_tutor(state: PipelineState) -> PipelineState:
         "Completed successfully.",
         code=state.developer_code,
         explanation=state.explanation,
+        current_attempt=state.attempt,
+        max_retries=state.max_retries,
+        artifacts={
+            "tutor": {
+                "attempt": state.attempt,
+                "explanation": state.explanation,
+                "summary": state.tutor_summary,
+            }
+        },
     )
     state.step = "completed"
     return state

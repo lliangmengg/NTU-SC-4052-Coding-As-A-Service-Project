@@ -6,6 +6,34 @@ from backend.core import state_manager
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from crewai import Crew
 
+
+def _extract_tagged_block(text: str, tag: str) -> str:
+    pattern = rf"\[{re.escape(tag)}\]\s*(.*?)\s*\[/{re.escape(tag)}\]"
+    match = re.search(pattern, text or "", flags=re.DOTALL | re.IGNORECASE)
+    return (match.group(1).strip() if match else "")
+
+
+def extract_structured_output(raw_text: str, primary_tag: str) -> dict:
+    """
+    Extract a dual-part tagged response. Returns fallback values if parsing fails.
+    """
+    primary = _extract_tagged_block(raw_text or "", primary_tag)
+    summary = _extract_tagged_block(raw_text or "", "SUMMARY")
+
+    if primary:
+        return {
+            "primary": primary,
+            "summary": summary,
+            "used_structured": True,
+        }
+
+    # Backward-compatible fallback: treat entire output as primary content.
+    return {
+        "primary": raw_text or "",
+        "summary": "",
+        "used_structured": False,
+    }
+
 def _log(job_id: str, message: str):
     # Keep logs visible in server output and retrievable via job status.
     print(message, flush=True)
@@ -78,14 +106,28 @@ def _sanitize_python_output(raw_text: str) -> str:
 
 def sanitize_developer(state: PipelineState) -> PipelineState:
     try:
-        state.developer_code = _sanitize_python_output(state.developer_code_raw or "")
+        extracted = extract_structured_output(state.developer_code_raw or "", "CODE")
+        state.developer_code = _sanitize_python_output(extracted["primary"])
+        state.developer_summary = extracted["summary"]
         if state.developer_code != state.developer_code_raw:
             _log(state.job_id, "[SANITIZED] Developer output cleaned before QA handoff.")
+        if not extracted["used_structured"]:
+            _log(state.job_id, "[PARSE_FALLBACK] Developer response missing [CODE]/[SUMMARY] tags.")
 
         _update_job(
             state.job_id,
             "PROCESSING",
-            f"Attempt {state.attempt}: QA generating tests..."
+            f"Attempt {state.attempt}: QA generating tests...",
+            current_attempt=state.attempt,
+            max_retries=state.max_retries,
+            artifacts={
+                "developer": {
+                    "attempt": state.attempt,
+                    "sanitized_code": state.developer_code,
+                    "summary": state.developer_summary,
+                    "structured_format": extracted["used_structured"],
+                }
+            },
         )
         state.step = "qa"
         return state
@@ -105,14 +147,28 @@ def sanitize_developer(state: PipelineState) -> PipelineState:
 
 def sanitize_qa(state: PipelineState) -> PipelineState:
     try:
-        state.qa_tests = _sanitize_python_output(state.qa_tests_raw or "")
+        extracted = extract_structured_output(state.qa_tests_raw or "", "TESTS")
+        state.qa_tests = _sanitize_python_output(extracted["primary"])
+        state.qa_summary = extracted["summary"]
         if state.qa_tests != state.qa_tests_raw:
             _log(state.job_id, "[SANITIZED] QA output cleaned before sandbox execution.")
+        if not extracted["used_structured"]:
+            _log(state.job_id, "[PARSE_FALLBACK] QA response missing [TESTS]/[SUMMARY] tags.")
 
         _update_job(
             state.job_id,
             "PROCESSING",
-            f"Attempt {state.attempt}: Running isolated sandbox..."
+            f"Attempt {state.attempt}: Running isolated sandbox...",
+            current_attempt=state.attempt,
+            max_retries=state.max_retries,
+            artifacts={
+                "qa": {
+                    "attempt": state.attempt,
+                    "sanitized_tests": state.qa_tests,
+                    "summary": state.qa_summary,
+                    "structured_format": extracted["used_structured"],
+                }
+            },
         )
         state.step = "sandbox"
         return state

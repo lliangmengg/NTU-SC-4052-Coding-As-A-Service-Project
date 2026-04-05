@@ -1,14 +1,27 @@
 DEVELOPER_EXPECTED_OUTPUT = """
-Return ONLY executable Python code.
+Return exactly two tagged sections in this order:
+
+[CODE]
+<executable Python solution>
+[/CODE]
+[SUMMARY]
+<concise developer approach summary>
+[/SUMMARY]
 
 Rules:
 - No markdown
-- No explanations
 - No code fences
 """.strip()
 
 QA_EXPECTED_OUTPUT = """
-Return ONLY executable pytest code.
+Return exactly two tagged sections in this order:
+
+[TESTS]
+<executable pytest tests>
+[/TESTS]
+[SUMMARY]
+<concise QA test-strategy summary>
+[/SUMMARY]
 
 Requirements:
 - Exactly 5 adversarial test cases
@@ -36,7 +49,14 @@ Rules:
 """.strip()
 
 TUTOR_EXPECTED_OUTPUT = """
-Return a clear explanation of the solution.
+Return exactly two tagged sections in this order:
+
+[EXPLANATION]
+<clear explanation>
+[/EXPLANATION]
+[SUMMARY]
+<short tutor summary>
+[/SUMMARY]
 
 Include:
 1. High-level idea
@@ -83,6 +103,14 @@ def developer_prompt(problem_description, previous_answer, error):
 
         Your previous attempts and their errors:
         {history}
+
+        Output format (strict):
+        [CODE]
+        <executable Python solution>
+        [/CODE]
+        [SUMMARY]
+        <concise approach summary>
+        [/SUMMARY]
         """
 
 def qa_prompt(problem_description, developer_code_str):
@@ -94,6 +122,14 @@ def qa_prompt(problem_description, developer_code_str):
 
         Developer code (for interface only):
         {developer_code_str}
+
+        Output format (strict):
+        [TESTS]
+        <executable pytest tests>
+        [/TESTS]
+        [SUMMARY]
+        <concise test strategy summary>
+        [/SUMMARY]
     """
 
 def algo_reflection_prompt(developer_code_str, qa_tests_str, result):
@@ -128,5 +164,13 @@ def tutor_prompt(problem_description, developer_code_str):
         {developer_code_str}
 
         Explain the solution clearly for a student.
+
+        Output format (strict):
+        [EXPLANATION]
+        <full explanation>
+        [/EXPLANATION]
+        [SUMMARY]
+        <short tutor summary>
+        [/SUMMARY]
 
     """

@@ -23,7 +23,7 @@ The architecture is split across:
 - Streamlit frontend (pure REST client)
 
 ## High Level Architecture
-![Architecture](images/Architecture%20Diagram.jpg)
+![Architecture](Images/Architecture%20Diagram.jpg)
 
 ## Tech Stack
 
@@ -238,19 +238,19 @@ Predefined tasks are loaded from `evaluation/dataset.json`.
 ## Interface Overiview
 
 ### Pipeline Progress
-![Pipeline](images/PipelineProgress.png)
+![Pipeline](Images/PipelineProgress.png)
 
 ### Code Solution
-![Solution](images/Workspace-Solution.png)
+![Solution](Images/Workspace-Solution.png)
 
 ### Tests Result
-![Test](images/Workspace%20TestResult.png)
+![Test](Images/Workspace%20TestResult.png)
 
 ### Code Playround
-![Editor](images/Workspce-CodePlayground.png)
+![Editor](Images/Workspce-CodePlayground.png)
 
 ### Solution Explanation
-![Tutor](images/WorkSpace_CodeExplanation.png)
+![Tutor](Images/WorkSpace_CodeExplanation.png)
 
 ## Testing
 
